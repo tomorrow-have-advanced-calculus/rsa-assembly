@@ -4,12 +4,13 @@ INCLUDE Irvine32.inc
 main EQU start@0
 
 RSAlgorithm PROTO, Mt:DWORD, E:DWORD, N:DWORD
+power proto , a:DWORD, n:DWORD
 
 .data
 readPrimeP BYTE "Enter P ( P must be a random prime number ): ", 0
 readPrimeQ BYTE "Enter Q ( Q must be a random prime number ): ", 0
 readPubKey BYTE "Enter E, 1 < E < Φ(n): ", 0
-readNumMsg BYTE "Enter a Integer: ", 0
+readNumMsg BYTE "Enter an Integer: ", 0
 match_msg BYTE 10h,"matches",0
 Ppri DWORD 0 ; prime number P
 Qpri DWORD 0 ; prime number Q
@@ -19,6 +20,10 @@ PubE DWORD 0 ; Public key E
 PemD DWORD 0 ; Private key D
 OMsg DWORD 0
 CMsg DWORD 0
+
+Ctmp DWORD 1
+OriM DWORD 0
+OriD DWORD 0
 
 .code
 calculatePrivateKey PROC USES eax ebx ecx edx
@@ -42,6 +47,7 @@ endCal:
   mov PemD, ebx
   ret
 calculatePrivateKey ENDP
+
 readPublicKeyE PROC USES eax ebx
   mov edx, OFFSET readPubKey
   call WriteString
@@ -50,6 +56,7 @@ readPublicKeyE PROC USES eax ebx
   call calculatePrivateKey
   ret
 readPublicKeyE ENDP
+
 generateKey PROC USES eax ebx
   mul Ppri
   mov Nmod, eax
@@ -62,6 +69,7 @@ generateKey PROC USES eax ebx
   call readPublicKeyE
   ret
 generateKey ENDP
+
 readTwoPrimeNumber PROC USES eax edx
   push ebp
   mov ebp, esp
@@ -90,40 +98,69 @@ main PROC
   mov eax, PemD
   mov edx, OFFSET readNumMsg
 
-  ; call dumpRegs
+  call dumpRegs
   call WriteString
   call ReadDec
   mov OMsg, eax
   INVOKE RSAlgorithm , OMsg, PubE, Nmod
+  call dumpRegs
+  call Crlf
+  call Crlf
+  call Crlf
+  mov edx, Nmod
+  call dumpRegs
+  INVOKE RSAlgorithm , eax, PemD, Nmod
+  ; mov eax, OMsg
+  call dumpRegs
   exit
 main ENDP
 
+RSAlgorithm PROC, M:DWORD, d:DWORD, N:DWORD
 
-RSAlgorithm PROC, M:DWORD, K:DWORD, N:DWORD
-  ; mov eax, M
-  ; mov ecx, 1
-  ; whileWithMlessThenN:
-    ; cmp ecx, K
-    ; je returnMmodN
-    ; mul M
-    ; inc ecx
-  ; cmp eax, N
-  ; jl whileWithMlessThenN
-
-; mov ebx, eax
-; div N
-
-; call dumpRegs
-; INVOKE RSAlgorithm, edx, eax, N
-; ret
-
-
-
-; returnMmodN:
-; div N
-; mov eax, edx
-; ret
-
+rec:
+  mov eax, M ;let eax be the base, eax = m = c
+  mov ecx, 1 ;ecx = s = 1
+fuckingWhile:
+  cmp eax, N
+    jae L
+  cmp ecx, d
+    je final
+  mul M
+  inc ecx
+  jmp fuckingWhile
+  
+L:
+  ; call dumpRegs; eax = m => m = c^a
+  push eax ;push newM
+  mov eax, d ;eax = k = d, calculate a and b
+  div ecx ;ecx = s, eax = b, edx = a
+  push eax ;push b
+  invoke power, M, edx ;calculate M^a
+  mul Ctmp
+  CDQ
+  div N
+  mov Ctmp, edx
+  pop d ; d = b
+  pop eax ; use for calculate new base => m%n
+  CDQ
+  div N 
+  mov M, edx ; c = edx = m%n
+  jmp rec
+  
+final:
+  mul Ctmp
+  CDQ
+  div N
+  mov eax, edx
+  ret
 RSAlgorithm ENDP
 
+power PROC USES ecx, a:DWORD, n:DWORD
+  mov eax, 1
+  mov ecx, n
+  l:
+    mul a
+  loop l
+  ret
+power ENDP
 END main
