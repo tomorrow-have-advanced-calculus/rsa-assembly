@@ -124,7 +124,7 @@ RSAlgorithm PROC, M:DWORD, d:DWORD, N:DWORD
   mov ecx, 1 ; ecx = s = 1
   .while_m_lessthen_n:
     cmp eax, M
-      jge .calculate_next_value
+      jae .calculate_next_value
     
     cmp ecx, d
       jne .dont_return_m_mod_n
