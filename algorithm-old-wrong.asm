@@ -119,15 +119,15 @@ RSAlgorithm PROC, M:DWORD, d:DWORD, N:DWORD
 ;int ctmp = 1
 ;mov Ctmp, 1
 
-while_1:
+.while_1:
   mov eax, M ; eax = m = c
   mov ecx, 1 ; ecx = s = 1
-  while_m_lessthen_n:
-    cmp eax, N
-      jae calculate_next_value
+  .while_m_lessthen_n:
+    cmp eax, M
+      jae .calculate_next_value
     
     cmp ecx, d
-      jne dont_return_m_mod_n
+      jne .dont_return_m_mod_n
     
     ; return m % n
     cdq
@@ -139,39 +139,35 @@ while_1:
     cdq
     idiv N
     mov eax, edx
-    jmp return
+    jmp .return
     
-    dont_return_m_mod_n:
+    .dont_return_m_mod_n:
     mul M
     inc ecx
     
-  jmp while_m_lessthen_n
-  calculate_next_value:
+  jmp .while_m_lessthen_n
+  .calculate_next_value:
 
   push eax ; backup m
   
   ; a = d%s, b = d/s
   mov eax, d
   xor edx, edx
-  cdq
-  idiv ecx ; b = eax, a = edx
-  
-  mov d, eax ; d = b
+  div d ; b = eax, a = edx
 
-  ; mov eax, edx; eax = a, edx = b, then eax = power(M, eax)
-  INVOKE power, M, edx  ; eax = power(M, a)
-  mul Ctmp              ; eax = eax*Ctmp
-  cdq	
-  idiv N                ; edx = eax % n
-  mov Ctmp, edx         ; storage Ctmp => Ctmp = ( power(c, a)*Ctmp )%n
+  xchg eax, edx; eax = a, edx = b, then eax = power(M, eax)
+  INVOKE power, M, eax ; eax = power(M, a)
+  mul Ctmp             ; eax = eax*Ctmp
+  div N                ; edx = eax % n
+  mov Ctmp, edx        ; storage Ctmp => Ctmp = ( power(c, a)*Ctmp )%n
 
-  pop eax      ; eax = m
-  cdq
-  idiv n       ; edx = m % n
-  mov M, edx   ; c = m%n
+  mov d, edx  ; xchg eax, edx => edx = b
+  pop eax     ; eax = m
+  div n       ; edx = m % n
+  mov M, edx  ; m%n
 
-jmp while_1
-return:
+jmp .while_1
+.return:
   ret
 
 
@@ -180,12 +176,9 @@ RSAlgorithm ENDP
 power PROC USES ecx, a:DWORD, n:DWORD
   mov eax, 1
   mov ecx, n
-  cmp ecx, 0
-  je returnVal
   l:
     mul a
   loop l
-  returnVal:
   ret
 power ENDP
 END main
