@@ -117,7 +117,7 @@ main ENDP
 
 RSAlgorithm PROC, M:DWORD, d:DWORD, N:DWORD
 ;int ctmp = 1
-;mov Ctmp, 1
+mov Ctmp, 1
 
 while_1:
   mov eax, M ; eax = m = c
@@ -131,13 +131,13 @@ while_1:
     
     ; return m % n
     cdq
-    idiv N
+    div N
     mov eax, edx
 
     mul Ctmp
 
     cdq
-    idiv N
+    div N
     mov eax, edx
     jmp return
     
@@ -154,7 +154,7 @@ while_1:
   mov eax, d
   xor edx, edx
   cdq
-  idiv ecx ; b = eax, a = edx
+  div ecx ; b = eax, a = edx
   
   mov d, eax ; d = b
 
@@ -162,12 +162,12 @@ while_1:
   INVOKE power, M, edx  ; eax = power(M, a)
   mul Ctmp              ; eax = eax*Ctmp
   cdq	
-  idiv N                ; edx = eax % n
+  div N                ; edx = eax % n
   mov Ctmp, edx         ; storage Ctmp => Ctmp = ( power(c, a)*Ctmp )%n
 
   pop eax      ; eax = m
   cdq
-  idiv n       ; edx = m % n
+  div n       ; edx = m % n
   mov M, edx   ; c = m%n
 
 jmp while_1
