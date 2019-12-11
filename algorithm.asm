@@ -130,6 +130,15 @@ RSAlgorithm PROC, M:DWORD, d:DWORD, N:DWORD
       jne .dont_return_m_mod_n
     
     ; return m % n
+    cdq
+    idiv N
+    mov eax, edx
+
+    mul Ctmp
+
+    cdq
+    idiv N
+    mov eax, edx
     jmp .return
     
     .dont_return_m_mod_n:
@@ -159,12 +168,6 @@ RSAlgorithm PROC, M:DWORD, d:DWORD, N:DWORD
 
 jmp .while_1
 .return:
-  ; eax = m
-  div N         ; edx = m%n
-  xchg eax, edx ; eax = m%n
-  mul Ctmp      ; eax*=Ctmp
-  div N         ; edx = ( Ctmp*(m%n) )%n
-  xchg eax, edx ; eax = edx
   ret
 
 
