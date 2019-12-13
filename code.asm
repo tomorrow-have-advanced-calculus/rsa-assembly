@@ -4,29 +4,163 @@ INCLUDE Irvine32.inc
 main EQU start@0
 
 RSAlgorithm PROTO, Mt:DWORD, E:DWORD, N:DWORD
-power proto , a:DWORD, n:DWORD
+power PROTO , a:DWORD, n:DWORD
+
+readInteger PROTO, msg:PTR BYTE, target:PTR DWORD
+printMessage PROTO, msg:PTR BYTE, value:DWORD
+printlnMessage PROTO, msg:PTR BYTE, value:DWORD
+setup PROTO,  P:PTR DWORD, Q:PTR DWORD, N:PTR DWORD, PN:PTR DWORD, E:PTR DWORD, D:PTR DWORD
+coprimeTest PROTO, num:DWORD, N:DWORD, PN:DWORD
+generatePrivateKey PROTO, E:DWORD, N:DWORD, D:PTR DWORD
 
 .data
+primeNumber DWORD 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191
+whitespace BYTE " ", 0
 readPrimeP BYTE "Enter P ( P must be a random prime number ): ", 0
 readPrimeQ BYTE "Enter Q ( Q must be a random prime number ): ", 0
-readPubKey BYTE "Enter E, 1 < E < Φ(n): ", 0
+readPubKey BYTE "Enter E(Public key), 1 < E < Φ(n): ", 0
 readNumMsg BYTE "Enter an Integer: ", 0
+useableMsg BYTE "Useable number:", 0
+pemDKeyMsg BYTE "Your private key: ", 0
+plaintextMsg BYTE  "Your Plaintext: ", 9, 0
+ciphertextMsg BYTE "Your Ciphertext: ", 9, 0
+
+showModMsg BYTE "Modulus N(mod N): ", 0
+showPhiMsg BYTE "Totient N(Φ(N)): ", 0
 match_msg BYTE 10h,"matches",0
-Ppri DWORD 0 ; prime number P
-Qpri DWORD 0 ; prime number Q
-Nmod DWORD 0 ; N is P*Q
-PhiN DWORD 0 ; Φ(N) = (p-1)(q-1)
-PubE DWORD 0 ; Public key E
-PemD DWORD 0 ; Private key D
-OMsg DWORD 0
-CMsg DWORD 0
+Ppri DWORD 0  ; prime number P
+Qpri DWORD 0  ; prime number Q
+Nmod DWORD 0  ; N is P*Q
+PhiN DWORD 0  ; Φ(N) = (p-1)(q-1)
+PubE DWORD 0  ; Public key E
+PemD DWORD 0  ; Private key D
+
+OMsg DWORD 0  ; Plaintext Message
+CMsg DWORD 0  ; Ciphertext Message
 
 Ctmp DWORD 1
-OriM DWORD 0
-OriD DWORD 0
 
 .code
-calculatePrivateKey PROC USES eax ebx ecx edx
+readInteger PROC USES eax edx edi, msg:PTR BYTE, target:PTR DWORD
+
+  ; copy target address to edi then copy the value to target address
+  mov edi, target
+  
+  ;print message
+  mov edx, msg
+  call WriteString
+  
+  ; read value then write into the [target]
+  call ReadDec
+  mov [edi], eax
+
+  ret
+readInteger ENDP
+printMessage PROC USES eax edx, msg:PTR BYTE, value:DWORD
+  mov edx, msg
+  call WriteString
+  mov eax, value
+  call WriteDec
+  ret
+printMessage ENDP
+printlnMessage PROC USES eax edx, msg:PTR BYTE, value:DWORD
+  INVOKE printMessage, msg, value
+  call Crlf
+  ret
+printlnMessage ENDP
+
+setup PROC USES eax ebx ecx edx, P:PTR DWORD, Q:PTR DWORD, N:PTR DWORD, PN:PTR DWORD, E:PTR DWORD, D:PTR DWORD
+  call Crlf
+  call Crlf
+  lea edi, primeNumber
+  call Crlf
+  mov edx, OFFSET useableMsg
+  call WriteString
+  printAllUseableNumber:
+    mov ecx, [edi]
+    cmp ecx, 181
+      jg printAllUseableNumberEnd
+    INVOKE printMessage, OFFSET whitespace, ecx
+      add edi, 4
+  jmp printAllUseableNumber
+  printAllUseableNumberEnd:
+  call Crlf
+  call Crlf
+
+
+  INVOKE readInteger, OFFSET readPrimeP, OFFSET Ppri
+  INVOKE readInteger, OFFSET readPrimeQ, OFFSET Qpri
+
+  ; calculate modules N
+  mov eax, Ppri
+  mul Qpri
+  mov Nmod, eax
+  
+  ; calculate Totient N
+  mov eax, Ppri
+  mov ebx, Qpri
+  dec eax
+  dec ebx
+  mul ebx
+  mov PhiN, eax
+
+  ; Print N and Phi(N)
+  INVOKE printlnMessage, OFFSET showModMsg, Nmod
+  INVOKE printlnMessage, OFFSET showPhiMsg, PhiN
+  
+  ; generate useable Public key (number e)
+  lea edi, primeNumber
+  call Crlf
+  mov edx, OFFSET useableMsg
+  call WriteString
+
+  publicCoprimeTest:
+    ; 1 < ecx < Phi(N)
+    mov ecx, [edi]
+    cmp ecx, 181
+      jg publicCoprimeTestEnd
+    cmp ecx, PhiN
+      jge publicCoprimeTestEnd
+    
+    INVOKE coprimeTest, ecx, Nmod, PhiN
+
+    ; call dumpRegs
+    cmp eax, 6666
+      je dontPrintE
+
+    INVOKE printMessage, OFFSET whitespace, ecx
+    dontPrintE:
+      add edi, 4
+  jmp publicCoprimeTest
+  publicCoprimeTestEnd:
+  call Crlf
+  call Crlf
+
+  INVOKE readInteger, OFFSET readPubKey, OFFSET PubE
+  INVOKE generatePrivateKey, PubE, Nmod, OFFSET PemD
+  INVOKE printlnMessage, OFFSET pemDKeyMsg, PemD
+  
+  ret
+setup ENDP
+coprimeTest PROC, num:DWORD, N:DWORD, PN:DWORD
+  mov eax, N
+  CDQ
+  div num
+  cmp edx, 0
+    je returnNCP ; not coprime with N
+
+  mov eax, PhiN
+  CDQ
+  div num
+  cmp edx, 0
+    je returnNCP ; not coprime with PhiN
+  jmp return
+  returnNCP:
+    mov eax, 6666
+  return:
+  ret
+coprimeTest ENDP
+generatePrivateKey PROC, E:DWORD, N:DWORD, D:PTR DWORD
 xor eax,eax
 mov ebx, 2
 cal:
@@ -46,76 +180,29 @@ endCal:
   je cal
   mov PemD, ebx
   ret
-calculatePrivateKey ENDP
-
-readPublicKeyE PROC USES eax ebx
-  mov edx, OFFSET readPubKey
-  call WriteString
-  call ReadDec
-  mov PubE, eax
-  call calculatePrivateKey
-  ret
-readPublicKeyE ENDP
-
-generateKey PROC USES eax ebx
-  mul Ppri
-  mov Nmod, eax
-  mov eax, Ppri
-  dec eax
-  mov ebx, Qpri
-  dec ebx
-  mul ebx
-  mov PhiN, eax
-  call readPublicKeyE
-  ret
-generateKey ENDP
-
-readTwoPrimeNumber PROC USES eax edx
-  push ebp
-  mov ebp, esp
-
-  mov edx, OFFSET readPrimeP
-  call WriteString
-  call ReadDec
-  mov Ppri, eax
-
-  mov edx, OFFSET readPrimeQ
-  call WriteString
-  call ReadDec
-  mov Qpri, eax
-
-  call generateKey
-
-  ;call Clrscr
-
-  mov esp, ebp
-  pop ebp
-  ret
-readTwoPrimeNumber ENDP
-
+generatePrivateKey ENDP
 main PROC
-  call readTwoPrimeNumber
-  mov eax, PemD
-  mov edx, OFFSET readNumMsg
+  
+  INVOKE setup, OFFSET Ppri, OFFSET Qpri, OFFSET Nmod, OFFSET PhiN, OFFSET PubE, OFFSET PemD
+  call Crlf
+  
+  ; read a integer to encrypte
+  INVOKE readInteger, OFFSET readNumMsg, OFFSET OMsg
+  call Crlf
 
-  call dumpRegs
-  call WriteString
-  call ReadDec
-  mov OMsg, eax
+  ; encrypte message
   INVOKE RSAlgorithm , OMsg, PubE, Nmod
-  call dumpRegs
-  call Crlf
-  call Crlf
-  call Crlf
-  mov edx, Nmod
-  call dumpRegs
+  INVOKE printlnMessage, OFFSET ciphertextMsg, eax
+  
+  ; decrypte message
   INVOKE RSAlgorithm , eax, PemD, Nmod
-  ; mov eax, OMsg
-  call dumpRegs
+  INVOKE printlnMessage, OFFSET plaintextMsg, eax
+  call Crlf
+  
   exit
 main ENDP
 
-RSAlgorithm PROC, M:DWORD, d:DWORD, N:DWORD
+RSAlgorithm PROC USES ecx edx, M:DWORD, d:DWORD, N:DWORD
 ;int ctmp = 1
 mov Ctmp, 1
 
@@ -124,7 +211,7 @@ while_1:
   mov ecx, 1 ; ecx = s = 1
   while_m_lessthen_n:
     cmp eax, N
-      jae calculate_next_value
+      jae while_m_lessthen_n_End
     
     cmp ecx, d
       jne dont_return_m_mod_n
@@ -146,7 +233,7 @@ while_1:
     inc ecx
     
   jmp while_m_lessthen_n
-  calculate_next_value:
+  while_m_lessthen_n_End:
 
   push eax ; backup m
   
