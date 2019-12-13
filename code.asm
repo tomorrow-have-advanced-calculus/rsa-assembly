@@ -3,6 +3,16 @@ TITLE RSA-FROM-NCU(RSA.asm)
 INCLUDE Irvine32.inc
 main EQU start@0
 
+;-------------------------------------------------------------------------------------
+; RSAlgorithm         -  encrypte and decrypte function                               |
+; power               -  other useful function                                        |
+; readInteger         -  easy to print message and read an integer                    |
+; printMessage        -  easy to print message and an integer                         |
+; printlnMessage      - easy to print message with change line                        |
+; setup               - rsa generating function                                       |
+; coprimeTest         - setup function's public key test                              |
+; generatePrivateKey  - setup function's generate a private key to decrypte message   |
+;-------------------------------------------------------------------------------------
 RSAlgorithm PROTO, Mt:DWORD, E:DWORD, N:DWORD
 power PROTO , a:DWORD, n:DWORD
 
@@ -14,6 +24,7 @@ coprimeTest PROTO, num:DWORD, N:DWORD, PN:DWORD
 generatePrivateKey PROTO, E:DWORD, N:DWORD, D:PTR DWORD
 
 .data
+; primeNumber - can be used prime number list
 primeNumber DWORD 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191
 whitespace BYTE " ", 0
 readPrimeP BYTE "Enter P ( P must be a random prime number ): ", 0
@@ -38,7 +49,7 @@ PemD DWORD 0  ; Private key D
 OMsg DWORD 0  ; Plaintext Message
 CMsg DWORD 0  ; Ciphertext Message
 
-Ctmp DWORD 1
+Ctmp DWORD 1  ; temp memory (RSA Calculation)
 
 .code
 readInteger PROC USES eax edx edi, msg:PTR BYTE, target:PTR DWORD
@@ -57,19 +68,27 @@ readInteger PROC USES eax edx edi, msg:PTR BYTE, target:PTR DWORD
   ret
 readInteger ENDP
 printMessage PROC USES eax edx, msg:PTR BYTE, value:DWORD
+  ; write message
   mov edx, msg
   call WriteString
+
+  ; write integer
   mov eax, value
   call WriteDec
+
   ret
 printMessage ENDP
 printlnMessage PROC USES eax edx, msg:PTR BYTE, value:DWORD
+  ; call printMessage
   INVOKE printMessage, msg, value
+  ; change line
   call Crlf
   ret
 printlnMessage ENDP
 
 setup PROC USES eax ebx ecx edx, P:PTR DWORD, Q:PTR DWORD, N:PTR DWORD, PN:PTR DWORD, E:PTR DWORD, D:PTR DWORD
+  ; --------------------
+  ; print all useable P and Q then P can not be equal Q
   call Crlf
   call Crlf
   lea edi, primeNumber
@@ -86,16 +105,23 @@ setup PROC USES eax ebx ecx edx, P:PTR DWORD, Q:PTR DWORD, N:PTR DWORD, PN:PTR D
   printAllUseableNumberEnd:
   call Crlf
   call Crlf
+  ; --------------------
 
 
+  ; --------------------
+  ; read P and Q
   INVOKE readInteger, OFFSET readPrimeP, OFFSET Ppri
   INVOKE readInteger, OFFSET readPrimeQ, OFFSET Qpri
+  ; --------------------
 
+  ; --------------------
   ; calculate modules N
   mov eax, Ppri
   mul Qpri
   mov Nmod, eax
+  ; --------------------
   
+  ; --------------------
   ; calculate Totient N
   mov eax, Ppri
   mov ebx, Qpri
@@ -103,11 +129,15 @@ setup PROC USES eax ebx ecx edx, P:PTR DWORD, Q:PTR DWORD, N:PTR DWORD, PN:PTR D
   dec ebx
   mul ebx
   mov PhiN, eax
+  ; --------------------
 
+  ; --------------------
   ; Print N and Phi(N)
   INVOKE printlnMessage, OFFSET showModMsg, Nmod
   INVOKE printlnMessage, OFFSET showPhiMsg, PhiN
+  ; --------------------
   
+  ; --------------------
   ; generate useable Public key (number e)
   lea edi, primeNumber
   call Crlf
@@ -135,50 +165,69 @@ setup PROC USES eax ebx ecx edx, P:PTR DWORD, Q:PTR DWORD, N:PTR DWORD, PN:PTR D
   publicCoprimeTestEnd:
   call Crlf
   call Crlf
+  ; --------------------
 
+  ; --------------------
+  ; read public key ( E ) then generate private key
   INVOKE readInteger, OFFSET readPubKey, OFFSET PubE
   INVOKE generatePrivateKey, PubE, Nmod, OFFSET PemD
   INVOKE printlnMessage, OFFSET pemDKeyMsg, PemD
+  ; --------------------
   
   ret
 setup ENDP
 coprimeTest PROC, num:DWORD, N:DWORD, PN:DWORD
+  ; --------------------
+  ; test num is coprime with N or not
   mov eax, N
   CDQ
   div num
   cmp edx, 0
-    je returnNCP ; not coprime with N
+    je returnNCP ; not coprime with N return 6666
+  ; --------------------
 
+  ; --------------------
+  ; test num is coprime with PhiN or not
   mov eax, PhiN
   CDQ
   div num
   cmp edx, 0
     je returnNCP ; not coprime with PhiN
   jmp return
+  ; --------------------
+
   returnNCP:
     mov eax, 6666
   return:
-  ret
+    ret
 coprimeTest ENDP
 generatePrivateKey PROC, E:DWORD, N:DWORD, D:PTR DWORD
-xor eax,eax
-mov ebx, 2
-cal:
-  inc ebx 
+  ; --------------------
+  ; setup first private
+  xor eax,eax
+  mov ebx, 2
+  ; --------------------
 
-  mov eax, PubE
-  mul ebx
-  ; mov ecx, PhiN
-  ; div ecx
-  div PhiN
+  ; --------------------
+  ; Start calculate private key
+  cal:
+    inc ebx 
 
-  cmp edx, 1
-  jne cal
-endCal:
+    mov eax, PubE
+    mul ebx
+    div PhiN
 
+    cmp edx, 1
+      jne cal 
+  endCal:
+  ; --------------------
+
+  ; --------------------
+  ; if e*d !≡ 1 (mod N) then calculate an new key
   cmp ebx, PubE
-  je cal
+    je cal
   mov PemD, ebx
+  ; --------------------
   ret
 generatePrivateKey ENDP
 main PROC
@@ -203,6 +252,7 @@ main PROC
 main ENDP
 
 RSAlgorithm PROC USES ecx edx, M:DWORD, d:DWORD, N:DWORD
+;https://github.com/tomorrow-have-advanced-calculus/algorithm/blob/master/loop.js
 ;int ctmp = 1
 mov Ctmp, 1
 
