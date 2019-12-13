@@ -8,10 +8,10 @@ main EQU start@0
 ; power               -  other useful function                                        |
 ; readInteger         -  easy to print message and read an integer                    |
 ; printMessage        -  easy to print message and an integer                         |
-; printlnMessage      - easy to print message with change line                        |
-; setup               - rsa generating function                                       |
-; coprimeTest         - setup function's public key test                              |
-; generatePrivateKey  - setup function's generate a private key to decrypte message   |
+; printlnMessage      -  easy to print message with change line                       |
+; setup               -  rsa generating function                                      |
+; coprimeTest         -  setup function's public key test                             |
+; generatePrivateKey  -  setup function's generate a private key to decrypte message  |
 ;-------------------------------------------------------------------------------------
 RSAlgorithm PROTO, Mt:DWORD, E:DWORD, N:DWORD
 power PROTO , a:DWORD, n:DWORD
