@@ -1,6 +1,7 @@
 TITLE RSA-FROM-NCU(RSA.asm)
 
 INCLUDE Irvine32.inc
+INCLUDE macros.inc
 main EQU start@0
 
 ;-------------------------------------------------------------------------------------
@@ -22,6 +23,8 @@ printlnMessage PROTO, msg:PTR BYTE, value:DWORD
 setup PROTO,  P:PTR DWORD, Q:PTR DWORD, N:PTR DWORD, PN:PTR DWORD, E:PTR DWORD, D:PTR DWORD
 coprimeTest PROTO, num:DWORD, N:DWORD, PN:DWORD
 generatePrivateKey PROTO, E:DWORD, N:DWORD, D:PTR DWORD
+readFileSync PROTO, bufPTR:PTR DWORD, bufSize:DWORD
+encrypteBuffer PROTO, bufPTR:PTR DWORD, bufSize:DWORD, target:PTR DWORD
 
 .data
 ; primeNumber - can be used prime number list
@@ -50,6 +53,15 @@ OMsg DWORD 0  ; Plaintext Message
 CMsg DWORD 0  ; Ciphertext Message
 
 Ctmp DWORD 1  ; temp memory (RSA Calculation)
+
+BUFFER_SIZE = 5000 
+buffer BYTE BUFFER_SIZE DUP(?)    ; plaintext's buffer
+EBUFFER_SIZE = 20000 
+Ebuffer BYTE EBUFFER_SIZE DUP(?)  ; encrypte's buffer
+filename    BYTE 80 DUP(0) 
+fileHandle  HANDLE ?
+fileSize DWORD 0
+
 
 .code
 readInteger PROC USES eax edx edi, msg:PTR BYTE, target:PTR DWORD
@@ -201,6 +213,7 @@ coprimeTest PROC, num:DWORD, N:DWORD, PN:DWORD
   return:
     ret
 coprimeTest ENDP
+
 generatePrivateKey PROC, E:DWORD, N:DWORD, D:PTR DWORD
   ; --------------------
   ; setup first private
@@ -230,26 +243,107 @@ generatePrivateKey PROC, E:DWORD, N:DWORD, D:PTR DWORD
   ; --------------------
   ret
 generatePrivateKey ENDP
-main PROC
-  
-  INVOKE setup, OFFSET Ppri, OFFSET Qpri, OFFSET Nmod, OFFSET PhiN, OFFSET PubE, OFFSET PemD
-  call Crlf
-  
-  ; read a integer to encrypte
-  INVOKE readInteger, OFFSET readNumMsg, OFFSET OMsg
-  call Crlf
 
-  ; encrypte message
-  INVOKE RSAlgorithm , OMsg, PubE, Nmod
-  INVOKE printlnMessage, OFFSET ciphertextMsg, eax
+
+readFileSync PROC USES ecx edx esi, bufPTR:PTR DWORD, bufSize:DWORD
+
+  mWrite "Enter an input filename: "
+  mov edx,OFFSET filename
+  mov ecx,SIZEOF filename
+  call ReadString
   
-  ; decrypte message
-  INVOKE RSAlgorithm , eax, PemD, Nmod
-  INVOKE printlnMessage, OFFSET plaintextMsg, eax
-  call Crlf
+  mov edx,OFFSET filename
+  call OpenInputFile
   
-  exit
-main ENDP
+  mov fileHandle,eax
+  
+  cmp eax,INVALID_HANDLE_VALUE
+    jne file_ok
+  
+  mWrite <"Cannot open file",0dh,0ah>
+    mov eax, 1 ; can not open file
+    jmp quit
+  
+  file_ok:
+    mov edx,bufPTR
+    mov ecx,BUFFER_SIZE
+    call ReadFromFile
+      jnc check_buffer_size
+    
+    mWrite "Error reading file. "
+    mov eax, 2 ; failed to read file
+    call WriteWindowsMsg
+      jmp close_file
+  check_buffer_size:
+    cmp eax,BUFFER_SIZE
+      jb buf_size_ok
+    mWrite <"Error: Buffer too small for the file",0dh,0ah>
+      mov eax, 3 ; Buffer too small for the file
+      jmp quit
+  buf_size_ok:
+    mov ebx, eax
+    mov esi, bufPTR
+    add esi, eax
+    push eax
+    mov al, 0
+    mov [esi], al ;mov bufPTR[eax],0
+    pop eax
+    
+    ; mWrite "File size: "
+    ; call WriteDec
+    ; call Crlf
+    
+    ; mWrite <"Buffer:",0dh,0ah,0dh,0ah>
+    ; mov edx,bufPTR
+    ; call WriteString
+    ; call Crlf
+  close_file:
+    mov eax,fileHandle
+    call CloseFile
+    mov eax, 0 ; no error
+
+  quit:
+    ret
+readFileSync ENDP
+
+writeFileSync PROC, bufPTR:PTR DWORD, bufSize:DWORD
+
+  mWrite "Enter an output filename: "
+  mov edx,OFFSET filename
+  mov ecx,SIZEOF filename
+  call ReadString
+
+	mov edx,OFFSET filename
+	call CreateOutputFile
+	mov fileHandle, eax
+
+	cmp eax, INVALID_HANDLE_VALUE ; error found?
+    jne file_ok ; no: skip
+  mWrite <"Cannot create file",0dh,0ah,0>
+	; mov edx,OFFSET str1 ; display error
+	; call WriteString
+    jmp quit
+
+  file_ok:
+    mov eax,fileHandle
+    mov edx,bufPTR
+    mov ecx,bufSize
+    call WriteToFile
+    ; mov bytesWritten,eax ; save return value
+    call CloseFile
+  ; Display the return value.
+    mWrite <"file write into ">
+    mov edx, OFFSET filename
+    call WriteString
+    call Crlf
+    ; mov eax,bytesWritten
+    ; mov eax, bufSize
+    ; call WriteDec
+    ; call Crlf
+  quit:
+    ret
+
+writeFileSync ENDP
 
 RSAlgorithm PROC USES ecx edx, M:DWORD, d:DWORD, N:DWORD
 ;https://github.com/tomorrow-have-advanced-calculus/algorithm/blob/master/loop.js
@@ -325,4 +419,138 @@ power PROC USES ecx, a:DWORD, n:DWORD
   returnVal:
   ret
 power ENDP
+
+encrypteBuffer PROC USES eax ecx esi edi, bufPTR:PTR DWORD, bufSize:DWORD, target:PTR DWORD
+  mov esi, bufPTR
+  mov ecx, bufSize
+  mov edi, target
+  encrypteLoop:
+    xor eax, eax
+    mov al, [esi]
+    INVOKE RSAlgorithm, eax, PubE, Nmod
+    call WriteDec
+    call Crlf
+    push ecx
+    mov ecx, 4
+    writeIntoTheBuffer:
+      mov [edi], al
+      shr eax, 8
+      inc edi
+    loop writeIntoTheBuffer
+    inc esi
+    pop ecx
+  loop encrypteLoop
+  ret
+encrypteBuffer ENDP
+decrypteBuffer PROC USES eax ecx esi edi, bufPTR:PTR DWORD, bufSize:DWORD, target:PTR DWORD
+  mov eax, bufSize
+  mov ecx, 4
+  CDQ
+  idiv ecx
+  xchg eax, ecx
+  
+  mov esi, bufPTR
+  mov edi, target
+  
+  solveBuf:
+
+    mov eax, [esi]
+    push eax
+    INVOKE RSAlgorithm, eax, PemD, Nmod
+    call WriteDec
+    call Crlf
+    mov [edi], al
+
+    inc edi
+    add esi, 4
+  loop solveBuf
+  ret
+decrypteBuffer ENDP
+
+
+
+main PROC
+  
+  INVOKE setup, OFFSET Ppri, OFFSET Qpri, OFFSET Nmod, OFFSET PhiN, OFFSET PubE, OFFSET PemD
+  call Crlf
+  
+  ; read a integer to encrypte
+  ; INVOKE readInteger, OFFSET readNumMsg, OFFSET OMsg
+  ; call Crlf
+
+  ; encrypte message
+  ; INVOKE RSAlgorithm , OMsg, PubE, Nmod
+  ; INVOKE printlnMessage, OFFSET ciphertextMsg, eax
+  
+  ; decrypte message
+  ; INVOKE RSAlgorithm , eax, PemD, Nmod
+  ; INVOKE printlnMessage, OFFSET plaintextMsg, eax
+  ; call Crlf
+  
+  mWrite <"---------menu---------", 0dh, 0ah,"   1. Encrypte file", 0dh, 0ah,"   2. Decrypte file", 0dh, 0ah,"   -. Quit Program", 0dh, 0ah,0>
+  ;mWrite <"---------menu---------", 0dh, 0ah,
+  ;        "1. Encrypte file", 0dh, 0ah,
+  ;        "2. Decrypte file", 0dh, 0ah,
+  ;        "-. Quit Program", 0dh, 0ah,0
+  ;>
+  call ReadChar
+  cmp al, 49
+    je encrypte
+  cmp al, 50
+    je decrypte
+  mov eax, 404
+    jmp quitWithError
+  encrypte:
+    INVOKE readFileSync, OFFSET buffer, BUFFER_SIZE
+    cmp ebx, 0
+      je quitWithError
+    mWrite <"Buffer:",0dh,0ah,"--------------------",0dh,0ah>
+    mov edx,OFFSET buffer
+    call WriteString
+    mWrite <0dh,0ah,"--------------------",0dh,0ah>
+
+    mWrite <"Ciphertext:",0dh,0ah,"--------------------",0dh,0ah>
+    INVOKE encrypteBuffer, OFFSET buffer, ebx,OFFSET Ebuffer
+    mWrite <0dh,0ah,"--------------------",0dh,0ah,0dh,0ah>
+
+    ;Write Ciphertext into an file
+    mov eax, 4
+    xchg eax, ebx
+    mul ebx
+
+    INVOKE writeFileSync, OFFSET Ebuffer, eax
+  jmp quit
+  
+  decrypte:
+    INVOKE readFileSync, OFFSET Ebuffer, EBUFFER_SIZE
+    cmp ebx, 0
+      je quitWithError
+    mWrite <"Ciphertext:",0dh,0ah,"--------------------",0dh,0ah>
+    mov edx,OFFSET Ebuffer
+    call WriteString
+    mWrite <0dh,0ah,"--------------------",0dh,0ah,0dh,0ah>
+
+    mWrite <"Plaintext:",0dh,0ah,"--------------------",0dh,0ah>
+    INVOKE decrypteBuffer, OFFSET Ebuffer, ebx,OFFSET buffer
+    mWrite <0dh,0ah,"--------------------",0dh,0ah>
+
+    mov eax, 4
+    xchg eax, ebx
+    CDQ
+    idiv ebx
+
+    INVOKE writeFileSync, OFFSET buffer, eax
+  jmp quit
+
+quit:  
+  exit
+quitWithError:
+  mWrite <0dh, 0ah, "Error reading file, error code: ">
+  call WriteDec
+  mWrite <0dh, 0ah, 0dh, 0ah>
+  jmp quit
+
+main ENDP
+
+
 END main
