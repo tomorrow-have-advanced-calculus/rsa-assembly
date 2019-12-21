@@ -54,9 +54,9 @@ CMsg DWORD 0  ; Ciphertext Message
 
 Ctmp DWORD 1  ; temp memory (RSA Calculation)
 
-BUFFER_SIZE = 5000 
+BUFFER_SIZE = 500000 
 buffer BYTE BUFFER_SIZE DUP(?)    ; plaintext's buffer
-EBUFFER_SIZE = 20000 
+EBUFFER_SIZE = 2000000 
 Ebuffer BYTE EBUFFER_SIZE DUP(?)  ; encrypte's buffer
 filename    BYTE 80 DUP(0) 
 fileHandle  HANDLE ?
@@ -473,7 +473,17 @@ decrypteBuffer ENDP
 
 main PROC
 
-  mWrite <"---------menu---------", 0dh, 0ah,"   1. Encrypte file", 0dh, 0ah,"   2. Decrypte file", 0dh, 0ah,"   3. use Public key encrypte file",0dh, 0ah,"   4. use Private key decrypte file", 0dh, 0ah, 0dh, 0ah,"   -. Quit Program", 0dh, 0ah, 0dh, 0ah,0>
+  mWrite <" _________________menu_________________", 0dh, 0ah>
+  mWrite <"|                                      |", 0dh, 0ah>
+  mWrite <"|   1. Encrypte file                   |", 0dh, 0ah>
+  mWrite <"|   2. Decrypte file                   |", 0dh, 0ah>
+  mWrite <"|   3. use Public key encrypte file    |",0dh, 0ah>
+  mWrite <"|   4. use Private key decrypte file   |", 0dh, 0ah>
+  mWrite <"|   5. en/decrypte singal message      |", 0dh, 0ah>
+  mWrite <"|______________________________________|", 0dh, 0ah>
+  mWrite <"|   <any key>. Quit Program            |", 0dh, 0ah>
+  mWrite <"|______________________________________|", 0dh, 0ah>
+  mWrite <0dh, 0ah>
   ;mWrite <"---------menu---------", 0dh, 0ah,
   ;        "1. Encrypte file", 0dh, 0ah,
   ;        "2. Decrypte file", 0dh, 0ah,
@@ -489,6 +499,8 @@ main PROC
     je readPublicKey
   cmp al, 52
     je readPrivateKey
+  cmp al, 53
+    je setupKey
   mov eax, 404
     jmp quitWithError
 
@@ -501,6 +513,8 @@ main PROC
       je encrypte
     cmp al, 50
       je decrypte
+    cmp al, 53
+      je crypteSingalMsg
     jmp quitWithError
   
   readPublicKey:
@@ -561,6 +575,15 @@ main PROC
     idiv ebx
 
     INVOKE writeFileSync, OFFSET buffer, eax
+  jmp quit
+  
+  crypteSingalMsg:
+    mWrite <"Message: ">
+    call ReadDec
+    INVOKE RSAlgorithm, eax, PubE, Nmod
+    mWrite "Result: "
+    call WriteDec
+    call Crlf
   jmp quit
 
 quit:  
