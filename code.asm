@@ -62,6 +62,8 @@ filename    BYTE 80 DUP(0)
 fileHandle  HANDLE ?
 fileSize DWORD 0
 
+mode BYTE 0
+
 
 .code
 readInteger PROC USES eax edx edi, msg:PTR BYTE, target:PTR DWORD
@@ -385,7 +387,7 @@ while_1:
   mov eax, d
   xor edx, edx
   cdq
-  div ecx ; b = eax, a = edx
+  idiv ecx ; b = eax, a = edx
   
   mov d, eax ; d = b
 
@@ -393,12 +395,12 @@ while_1:
   INVOKE power, M, edx  ; eax = power(M, a)
   mul Ctmp              ; eax = eax*Ctmp
   cdq	
-  div N                ; edx = eax % n
+  idiv N                ; edx = eax % n
   mov Ctmp, edx         ; storage Ctmp => Ctmp = ( power(c, a)*Ctmp )%n
 
   pop eax      ; eax = m
   cdq
-  div n       ; edx = m % n
+  idiv n       ; edx = m % n
   mov M, edx   ; c = m%n
 
 jmp while_1
@@ -470,36 +472,55 @@ decrypteBuffer ENDP
 
 
 main PROC
-  
-  INVOKE setup, OFFSET Ppri, OFFSET Qpri, OFFSET Nmod, OFFSET PhiN, OFFSET PubE, OFFSET PemD
-  call Crlf
-  
-  ; read a integer to encrypte
-  ; INVOKE readInteger, OFFSET readNumMsg, OFFSET OMsg
-  ; call Crlf
 
-  ; encrypte message
-  ; INVOKE RSAlgorithm , OMsg, PubE, Nmod
-  ; INVOKE printlnMessage, OFFSET ciphertextMsg, eax
-  
-  ; decrypte message
-  ; INVOKE RSAlgorithm , eax, PemD, Nmod
-  ; INVOKE printlnMessage, OFFSET plaintextMsg, eax
-  ; call Crlf
-  
-  mWrite <"---------menu---------", 0dh, 0ah,"   1. Encrypte file", 0dh, 0ah,"   2. Decrypte file", 0dh, 0ah,"   -. Quit Program", 0dh, 0ah,0>
+  mWrite <"---------menu---------", 0dh, 0ah,"   1. Encrypte file", 0dh, 0ah,"   2. Decrypte file", 0dh, 0ah,"   3. use Public key encrypte file",0dh, 0ah,"   4. use Private key decrypte file", 0dh, 0ah, 0dh, 0ah,"   -. Quit Program", 0dh, 0ah, 0dh, 0ah,0>
   ;mWrite <"---------menu---------", 0dh, 0ah,
   ;        "1. Encrypte file", 0dh, 0ah,
   ;        "2. Decrypte file", 0dh, 0ah,
   ;        "-. Quit Program", 0dh, 0ah,0
   ;>
   call ReadChar
+  mov mode, al
   cmp al, 49
-    je encrypte
+    je setupKey
   cmp al, 50
-    je decrypte
+    je setupKey
+  cmp al, 51
+    je readPublicKey
+  cmp al, 52
+    je readPrivateKey
   mov eax, 404
     jmp quitWithError
+
+
+  setupKey:
+    INVOKE setup, OFFSET Ppri, OFFSET Qpri, OFFSET Nmod, OFFSET PhiN, OFFSET PubE, OFFSET PemD
+    call Crlf
+    mov al, mode
+    cmp al, 49
+      je encrypte
+    cmp al, 50
+      je decrypte
+    jmp quitWithError
+  
+  readPublicKey:
+    mWrite <"Enter Public key (E): ">
+    call ReadDec
+    mov PubE, eax
+    mWrite <"Enter Asymmetric key (N): ">
+    call ReadDec
+    mov Nmod, eax
+  jmp encrypte
+  
+  readPrivateKey:
+    mWrite <"Enter Private key (D): ">
+    call ReadDec
+    mov PemD, eax
+    mWrite <"Enter Asymmetric key (N): ">
+    call ReadDec
+    mov Nmod, eax
+  jmp decrypte
+
   encrypte:
     INVOKE readFileSync, OFFSET buffer, BUFFER_SIZE
     cmp ebx, 0
@@ -507,7 +528,7 @@ main PROC
     mWrite <"Buffer:",0dh,0ah,"--------------------",0dh,0ah>
     mov edx,OFFSET buffer
     call WriteString
-    mWrite <0dh,0ah,"--------------------",0dh,0ah>
+    mWrite <0dh,0ah,"--------------------",0dh,0ah,0dh,0ah>
 
     mWrite <"Ciphertext:",0dh,0ah,"--------------------",0dh,0ah>
     INVOKE encrypteBuffer, OFFSET buffer, ebx,OFFSET Ebuffer
@@ -532,7 +553,7 @@ main PROC
 
     mWrite <"Plaintext:",0dh,0ah,"--------------------",0dh,0ah>
     INVOKE decrypteBuffer, OFFSET Ebuffer, ebx,OFFSET buffer
-    mWrite <0dh,0ah,"--------------------",0dh,0ah>
+    mWrite <0dh,0ah,"--------------------",0dh,0ah,0dh,0ah>
 
     mov eax, 4
     xchg eax, ebx
